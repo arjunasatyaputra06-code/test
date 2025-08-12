@@ -1248,6 +1248,53 @@ def set_autoplay_off(driver, tab_number):
         print(f"TAB {tab_number}: Gagal set autoplay OFF: {e}")
         return False
 
+def detect_ad_by_skip_button(driver, tab_number, timeout_seconds=2.0):
+    """
+    Mendeteksi apakah iklan sedang berjalan dengan memeriksa keberadaan tombol skip_button
+    sesuai referensi pada youtube_element.txt. Jika tombol ditemukan dan terlihat, anggap iklan ada.
+    Tidak melakukan klik skip; hanya verifikasi lalu kembalikan True.
+    """
+    try:
+        print(f"TAB {tab_number}: Memeriksa adanya iklan (skip_button)...")
+        # Selector utama dari youtube_element.txt dan beberapa fallback yang umum
+        selectors = [
+            "#skip-button\\:v",                  # dari youtube_element.txt (escaped colon)
+            "button#skip-button\\:v",           # variasi eksplisit button
+            "button[id^='skip-button']",          # prefix-based id
+            "button.ytp-skip-ad-button",          # class umum skip
+            ".ytp-skip-ad-button"                 # fallback class
+        ]
+
+        check_script = """
+        const sels = arguments[0];
+        for (const sel of sels) {
+          const el = document.querySelector(sel);
+          if (el) {
+            const style = window.getComputedStyle(el);
+            const visible = style && style.visibility !== 'hidden' && style.display !== 'none' && el.offsetParent !== null;
+            if (visible) { return true; }
+          }
+        }
+        return false;
+        """
+
+        end_time = time.time() + timeout_seconds
+        while time.time() < end_time:
+            try:
+                found = driver.execute_script(check_script, selectors)
+                if found:
+                    print(f"TAB {tab_number}: Iklan terdeteksi (skip_button terlihat). Membiarkan iklan berjalan...")
+                    return True
+            except Exception:
+                pass
+            time.sleep(0.4)
+
+        print(f"TAB {tab_number}: Tidak ada indikasi iklan via skip_button saat ini")
+        return False
+    except Exception as e:
+        print(f"TAB {tab_number}: Error deteksi iklan: {e}")
+        return False
+
 def prepare_tab_for_playback(driver, tab_number):
     """
     Menutup consent, menunggu elemen, mematikan autoplay, lalu memastikan video diputar.
@@ -1258,6 +1305,17 @@ def prepare_tab_for_playback(driver, tab_number):
         time.sleep(2)
         if not wait_for_youtube_elements(driver, tab_number):
             print(f"TAB {tab_number}: Elemen YouTube belum siap, lanjutkan dengan hati-hati")
+        # Deteksi iklan via skip_button: jika ada, biarkan iklan berjalan dan langsung lanjut ke tab berikutnya
+        if detect_ad_by_skip_button(driver, tab_number):
+            # Optional: scroll sedikit agar player stabil, tanpa interaksi lain
+            try:
+                driver.execute_script("window.scrollTo(0, 300)")
+            except Exception:
+                pass
+            print(f"TAB {tab_number}: Iklan terdeteksi dan dibiarkan berjalan. Lanjut membuka tab berikutnya...")
+            return True
+
+        # Jika tidak ada iklan, lakukan alur normal
         set_autoplay_off(driver, tab_number)
         driver.execute_script("window.scrollTo(0, 500)")
         time.sleep(1)
