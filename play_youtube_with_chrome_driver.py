@@ -1,5 +1,13 @@
 # @title Memainkan video Youtube dengan selenium di 6 tab terpisah
 # PERBAIKAN UNTUK GOOGLE COLAB:
+# Parameter untuk input video ID
+video_id_1 = "DGDmRgrsWlk" # @param {type:"string"} {label:"Video ID 1"}
+video_id_2 = "6lk3RO3bPmQ" # @param {type:"string"} {label:"Video ID 2"}
+video_id_3 = "uO9FgSUBTx0" # @param {type:"string"} {label:"Video ID 3"}
+video_id_4 = "gPU1uCFyHQQ" # @param {type:"string"} {label:"Video ID 4"}
+video_id_5 = "sXIYXX5bBbY" # @param {type:"string"} {label:"Video ID 5"}
+video_id_6 = "wdtzfHDBmLs" # @param {type:"string"} {label:"Video ID 6"}
+demo_video_id = "uO9FgSUBTx0" # @param {type:"string"} {label:"Demo Video ID untuk testing"}
 # - Menggunakan JavaScript langsung untuk memainkan video (metode yang terbukti berhasil)
 # - Menghilangkan semua metode klik tombol yang gagal karena overlay
 # - Menggunakan 4 methods JavaScript yang reliable:
@@ -67,6 +75,14 @@
 # 4. Jika video gagal diputar, akan dicoba dengan multiple methods
 # 5. Monitoring akan berjalan selama video diputar
 # 6. Report lengkap akan ditampilkan untuk setiap tab
+#
+# PENGGUNAAN DI GOOGLE COLAB:
+# ===========================
+# 1. Upload script ini ke Google Colab
+# 2. Setiap parameter video ID akan muncul sebagai input field di atas cell
+# 3. Masukkan YouTube Video ID yang diinginkan (contoh: "DGDmRgrsWlk")
+# 4. Jalankan cell untuk memulai script
+# 5. Script akan menggunakan video ID yang telah diinput
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -1645,12 +1661,12 @@ if __name__ == "__main__":
     print("3. Advanced monitoring demo")
     
     # Untuk demo, gunakan video yang pendek
-    demo_video_id = "uO9FgSUBTx0"  # Me at the zoo (video pendek)
+    # demo_video_id sudah didefinisikan sebagai parameter Google Colab
     
     # Uncomment salah satu untuk testing:
     
     # Mode 1: Multiple tabs (default)
-    # video_ids = ["6lk3RO3bPmQ", "DGDmRgrsWlk", "uO9FgSUBTx0", "gPU1uCFyHQQ", "sXIYXX5bBbY", "wdtzfHDBmLs"]
+    # video_ids = [video_id_1, video_id_2, video_id_3, video_id_4, video_id_5, video_id_6]
     # environment = detect_environment()
     # create_and_manage_tabs(environment, video_ids)
     
@@ -1662,14 +1678,14 @@ if __name__ == "__main__":
     # environment = detect_environment()
     # demo_advanced_monitoring(environment, demo_video_id, 1)
     
-    # Default: Multiple tabs
+    # Default: Multiple tabs menggunakan parameter Google Colab
     video_ids = [
-        "DGDmRgrsWlk",  # Video 1
-        "6lk3RO3bPmQ",  # Video 2
-        "uO9FgSUBTx0",  # Video 3
-        "gPU1uCFyHQQ",  # Video 4
-        "sXIYXX5bBbY",  # Video 5
-        "wdtzfHDBmLs"   # Video 6
+        video_id_1,  # Video 1
+        video_id_2,  # Video 2
+        video_id_3,  # Video 3
+        video_id_4,  # Video 4
+        video_id_5,  # Video 5
+        video_id_6   # Video 6
     ]
     
     # Deteksi environment
