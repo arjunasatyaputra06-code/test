@@ -1305,21 +1305,28 @@ def prepare_tab_for_playback(driver, tab_number):
         time.sleep(2)
         if not wait_for_youtube_elements(driver, tab_number):
             print(f"TAB {tab_number}: Elemen YouTube belum siap, lanjutkan dengan hati-hati")
-        # Deteksi iklan via skip_button: jika ada, biarkan iklan berjalan dan langsung lanjut ke tab berikutnya
+        # Matikan autoplay dan persiapkan viewport
+        set_autoplay_off(driver, tab_number)
+        driver.execute_script("window.scrollTo(0, 500)")
+        time.sleep(1)
+
+        # 1) Coba memainkan video sekali terlebih dahulu
+        played_first_try = ensure_video_plays(driver, tab_number, max_attempts=1)
+        if played_first_try:
+            print(f"TAB {tab_number}: {get_status_message('ok')} Siap: video PLAYING dan autoplay OFF")
+            return True
+
+        # 2) Jika gagal pada percobaan pertama, periksa apakah ada iklan (skip_button)
         if detect_ad_by_skip_button(driver, tab_number):
-            # Optional: scroll sedikit agar player stabil, tanpa interaksi lain
             try:
                 driver.execute_script("window.scrollTo(0, 300)")
             except Exception:
                 pass
-            print(f"TAB {tab_number}: Iklan terdeteksi dan dibiarkan berjalan. Lanjut membuka tab berikutnya...")
+            print(f"TAB {tab_number}: Iklan terdeteksi setelah percobaan play. Biarkan iklan berjalan, lanjut ke tab berikutnya...")
             return True
 
-        # Jika tidak ada iklan, lakukan alur normal
-        set_autoplay_off(driver, tab_number)
-        driver.execute_script("window.scrollTo(0, 500)")
-        time.sleep(1)
-        played = ensure_video_plays(driver, tab_number, max_attempts=5)
+        # 3) Jika tidak ada iklan, lanjutkan sisa attempt untuk memastikan video bermain
+        played = ensure_video_plays(driver, tab_number, max_attempts=4)
         if played:
             print(f"TAB {tab_number}: {get_status_message('ok')} Siap: video PLAYING dan autoplay OFF")
             return True
