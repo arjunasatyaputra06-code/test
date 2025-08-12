@@ -80,6 +80,21 @@ import os
 import platform
 from webdriver_manager.chrome import ChromeDriverManager
 import threading
+import sys
+
+# Konfigurasi encoding untuk Windows
+if platform.system() == "Windows":
+    # Set encoding untuk Windows
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+    # Set console encoding
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+    # Set console code page untuk Windows
+    try:
+        os.system('chcp 65001 > nul')
+    except:
+        pass
 
 # Deteksi environment
 def detect_environment():
@@ -88,10 +103,35 @@ def detect_environment():
         return "colab"
     elif platform.system() == "Windows":
         return "windows"
-    elif platform.system() == "Darwin":
-        return "macos"
     else:
         return "linux"
+
+def get_status_message(status_type):
+    """
+    Fungsi helper untuk mendapatkan status message yang kompatibel dengan Windows
+    """
+    if platform.system() == "Windows":
+        # Gunakan teks biasa untuk Windows
+        status_messages = {
+            'ok': '[OK]',
+            'success': '[SUCCESS]',
+            'warning': '[WARNING]',
+            'error': '[ERROR]',
+            'retry': '[RETRY]',
+            'info': '[INFO]'
+        }
+    else:
+        # Gunakan karakter khusus untuk platform lain
+        status_messages = {
+            'ok': '[✅]',
+            'success': '[🎯]',
+            'warning': '[⚠️]',
+            'error': '[❌]',
+            'retry': '[🔄]',
+            'info': '[ℹ️]'
+        }
+    
+    return status_messages.get(status_type, f'[{status_type.upper()}]')
 
 def close_youtube_consent(driver, tab_number=0, timeout=12):
     """
@@ -443,7 +483,7 @@ def monitor_url_changes(driver, original_video_id, max_wait_time=300):
 
         # Jika URL berubah dari video asli
         if current_url != original_url:
-            print(f"⚠️  URL berubah dari {original_url} ke {current_url}")
+            print(f"{get_status_message('warning')} URL berubah dari {original_url} ke {current_url}")
             print("Mencoba kembali ke video asli...")
 
             try:
@@ -580,7 +620,7 @@ def play_video_in_tab(driver, video_id, tab_number, navigate=True):
 
         # Tunggu elemen YouTube penting muncul
         if not wait_for_youtube_elements(driver, tab_number):
-            print(f"TAB {tab_number}: ⚠️ Elemen YouTube tidak muncul dengan baik")
+                            print(f"TAB {tab_number}: {get_status_message('warning')} Elemen YouTube tidak muncul dengan baik")
             # Lanjutkan meskipun gagal, mungkin masih bisa berfungsi
         
         # Debug halaman untuk melihat apa yang tersedia
@@ -649,7 +689,7 @@ def play_video_in_tab(driver, video_id, tab_number, navigate=True):
         video_played = ensure_video_plays(driver, tab_number, max_attempts=5)
         
         if video_played:
-            print(f"TAB {tab_number}: ✅ Video berhasil diputar dan diverifikasi!")
+            print(f"TAB {tab_number}: {get_status_message('ok')} Video berhasil diputar dan diverifikasi!")
             
             # Tampilkan status detail video
             get_video_detailed_status(driver, tab_number)
@@ -659,15 +699,15 @@ def play_video_in_tab(driver, video_id, tab_number, navigate=True):
             monitoring_success = monitor_video_playback(driver, tab_number, check_interval=5, max_checks=60)
             
             if monitoring_success:
-                print(f"TAB {tab_number}: 🎉 Video berhasil diputar dan stabil!")
+                print(f"TAB {tab_number}: {get_status_message('success')} Video berhasil diputar dan stabil!")
                 # Lanjutkan dengan monitoring URL
                 print(f"TAB {tab_number}: Memulai monitoring URL...")
                 monitor_url_changes(driver, video_id)
             else:
-                print(f"TAB {tab_number}: ⚠️ Video tidak stabil, menggunakan fallback...")
+                print(f"TAB {tab_number}: {get_status_message('warning')} Video tidak stabil, menggunakan fallback...")
                 time.sleep(40)
         else:
-            print(f"TAB {tab_number}: ❌ Gagal memastikan video diputar")
+            print(f"TAB {tab_number}: {get_status_message('error')} Gagal memastikan video diputar")
             print(f"TAB {tab_number}: Mencoba screenshot untuk debugging...")
             try:
                 # Ambil screenshot untuk debugging
@@ -714,10 +754,10 @@ def verify_video_is_playing(driver, tab_number):
             """, video_element)
             
             if is_playing:
-                print(f"TAB {tab_number}: ✅ Video sedang diputar (status: playing)")
+                print(f"TAB {tab_number}: {get_status_message('ok')} Video sedang diputar (status: playing)")
                 return True
             else:
-                print(f"TAB {tab_number}: ⚠️ Video tidak sedang diputar (status: paused/ended)")
+                print(f"TAB {tab_number}: {get_status_message('warning')} Video tidak sedang diputar (status: paused/ended)")
                 return False
                 
         except Exception as e:
@@ -729,10 +769,10 @@ def verify_video_is_playing(driver, tab_number):
             button_aria_label = play_button.get_attribute('aria-label')
             
             if 'Pause' in button_aria_label or 'pause' in button_aria_label:
-                print(f"TAB {tab_number}: ✅ Tombol menunjukkan video sedang diputar (label: {button_aria_label})")
+                print(f"TAB {tab_number}: {get_status_message('ok')} Tombol menunjukkan video sedang diputar (label: {button_aria_label})")
                 return True
             elif 'Play' in button_aria_label or 'play' in button_aria_label:
-                print(f"TAB {tab_number}: ⚠️ Tombol menunjukkan video tidak sedang diputar (label: {button_aria_label})")
+                print(f"TAB {tab_number}: {get_status_message('warning')} Tombol menunjukkan video tidak sedang diputar (label: {button_aria_label})")
                 return False
                 
         except Exception as e:
@@ -749,10 +789,10 @@ def verify_video_is_playing(driver, tab_number):
                 total_time = float(total_time)
                 
                 if current_time > 0 and current_time < total_time:
-                    print(f"TAB {tab_number}: ✅ Progress bar menunjukkan video sedang berjalan (time: {current_time:.1f}s)")
+                    print(f"TAB {tab_number}: {get_status_message('ok')} Progress bar menunjukkan video sedang berjalan (time: {current_time:.1f}s)")
                     return True
                 else:
-                    print(f"TAB {tab_number}: ⚠️ Progress bar menunjukkan video tidak berjalan (time: {current_time:.1f}s)")
+                    print(f"TAB {tab_number}: {get_status_message('warning')} Progress bar menunjukkan video tidak berjalan (time: {current_time:.1f}s)")
                     return False
                     
         except Exception as e:
@@ -849,17 +889,17 @@ def ensure_video_plays(driver, tab_number, max_attempts=5):
             
             # Verifikasi video sedang diputar
             if verify_video_is_playing(driver, tab_number):
-                print(f"TAB {tab_number}: ✅ Video berhasil diputar dan diverifikasi!")
+                print(f"TAB {tab_number}: {get_status_message('ok')} Video berhasil diputar dan diverifikasi!")
                 return True
             else:
-                print(f"TAB {tab_number}: ⚠️ Video dimainkan tapi tidak terverifikasi, mencoba lagi...")
+                print(f"TAB {tab_number}: {get_status_message('warning')} Video dimainkan tapi tidak terverifikasi, mencoba lagi...")
                 video_played = False
         
         # Tunggu sebentar sebelum attempt berikutnya
         if attempt < max_attempts:
             time.sleep(2)
     
-    print(f"TAB {tab_number}: ❌ Gagal memastikan video diputar setelah {max_attempts} attempts")
+    print(f"TAB {tab_number}: {get_status_message('error')} Gagal memastikan video diputar setelah {max_attempts} attempts")
     return False
 
 def monitor_video_playback(driver, tab_number, check_interval=5, max_checks=60):
@@ -880,26 +920,26 @@ def monitor_video_playback(driver, tab_number, check_interval=5, max_checks=60):
             if is_playing:
                 consecutive_playing += 1
                 consecutive_paused = 0
-                print(f"TAB {tab_number}: ✅ Video sedang diputar (consecutive: {consecutive_playing})")
+                print(f"TAB {tab_number}: {get_status_message('ok')} Video sedang diputar (consecutive: {consecutive_playing})")
                 
                 # Jika video sudah diputar selama 3 checks berturut-turut, anggap berhasil
                 if consecutive_playing >= 3:
-                    print(f"TAB {tab_number}: 🎉 Video berhasil diputar dan stabil!")
+                    print(f"TAB {tab_number}: {get_status_message('success')} Video berhasil diputar dan stabil!")
                     return True
                     
             else:
                 consecutive_paused += 1
                 consecutive_playing = 0
-                print(f"TAB {tab_number}: ⚠️ Video tidak sedang diputar (consecutive: {consecutive_paused})")
+                print(f"TAB {tab_number}: {get_status_message('warning')} Video tidak sedang diputar (consecutive: {consecutive_paused})")
                 
                 # Jika video tidak diputar selama 3 checks berturut-turut, coba play lagi
                 if consecutive_paused >= 3:
-                    print(f"TAB {tab_number}: 🔄 Mencoba memainkan video lagi...")
+                    print(f"TAB {tab_number}: {get_status_message('retry')} Mencoba memainkan video lagi...")
                     if ensure_video_plays(driver, tab_number, max_attempts=2):
                         consecutive_paused = 0
                         consecutive_playing = 1
                     else:
-                        print(f"TAB {tab_number}: ❌ Gagal memainkan video")
+                        print(f"TAB {tab_number}: {get_status_message('error')} Gagal memainkan video")
             
             checks_done += 1
             time.sleep(check_interval)
@@ -909,7 +949,7 @@ def monitor_video_playback(driver, tab_number, check_interval=5, max_checks=60):
             checks_done += 1
             time.sleep(check_interval)
     
-    print(f"TAB {tab_number}: ⏰ Monitoring selesai setelah {max_checks} checks")
+            print(f"TAB {tab_number}: {get_status_message('info')} Monitoring selesai setelah {max_checks} checks")
     return consecutive_playing >= 3
 
 def get_video_detailed_status(driver, tab_number):
@@ -1081,22 +1121,22 @@ def force_video_play_with_multiple_methods(driver, tab_number):
             result = driver.execute_script(script)
             
             if result:
-                print(f"TAB {tab_number}: ✅ {method_name} berhasil")
+                print(f"TAB {tab_number}: {get_status_message('ok')} {method_name} berhasil")
                 time.sleep(2)
                 
                 # Verifikasi apakah video benar-benar diputar
                 if verify_video_is_playing(driver, tab_number):
-                    print(f"TAB {tab_number}: 🎉 Video berhasil diputar dengan {method_name}!")
+                    print(f"TAB {tab_number}: {get_status_message('success')} Video berhasil diputar dengan {method_name}!")
                     return True
                 else:
-                    print(f"TAB {tab_number}: ⚠️ {method_name} berhasil tapi video tidak terverifikasi")
+                    print(f"TAB {tab_number}: {get_status_message('warning')} {method_name} berhasil tapi video tidak terverifikasi")
             else:
-                print(f"TAB {tab_number}: ❌ {method_name} gagal")
+                print(f"TAB {tab_number}: {get_status_message('error')} {method_name} gagal")
                 
         except Exception as e:
             print(f"TAB {tab_number}: Error dengan {method_name}: {e}")
     
-    print(f"TAB {tab_number}: ❌ Semua method gagal")
+            print(f"TAB {tab_number}: {get_status_message('error')} Semua method gagal")
     return False
 
 def continuous_video_monitoring(driver, tab_number, duration_minutes=10):
@@ -1125,7 +1165,7 @@ def continuous_video_monitoring(driver, tab_number, duration_minutes=10):
             
             if is_playing:
                 successful_checks += 1
-                print(f"TAB {tab_number}: ✅ Video sedang diputar (success: {successful_checks}/{total_checks})")
+                print(f"TAB {tab_number}: {get_status_message('ok')} Video sedang diputar (success: {successful_checks}/{total_checks})")
                 
                 # Cek kualitas video setiap 5 checks
                 if total_checks % 5 == 0:
@@ -1133,11 +1173,11 @@ def continuous_video_monitoring(driver, tab_number, duration_minutes=10):
                     
             else:
                 failed_checks += 1
-                print(f"TAB {tab_number}: ⚠️ Video tidak diputar (failed: {failed_checks}/{total_checks})")
+                print(f"TAB {tab_number}: {get_status_message('warning')} Video tidak diputar (failed: {failed_checks}/{total_checks})")
                 
                 # Coba play ulang jika gagal 3 kali berturut-turut
                 if failed_checks >= 3:
-                    print(f"TAB {tab_number}: 🔄 Mencoba play ulang...")
+                    print(f"TAB {tab_number}: {get_status_message('retry')} Mencoba play ulang...")
                     if force_video_play_with_multiple_methods(driver, tab_number):
                         failed_checks = 0
                         successful_checks += 1
@@ -1165,61 +1205,146 @@ def continuous_video_monitoring(driver, tab_number, duration_minutes=10):
     
     return final_success_rate >= 80  # Return True jika success rate >= 80%
 
+def set_autoplay_off(driver, tab_number):
+    """
+    Memastikan autoplay YouTube OFF (autonav toggle dimatikan) dan set video.muted untuk memudahkan play.
+    """
+    try:
+        disable_autoplay_script = """
+        const toggleCandidates = [
+          '#movie_player > div.ytp-chrome-bottom > div.ytp-chrome-controls > div.ytp-right-controls > div.ytp-right-controls-left > button.ytp-button.ytp-autonav-toggle > div > div',
+          'button.ytp-button.ytp-autonav-toggle div.ytp-autonav-toggle-button',
+          '.ytp-autonav-toggle-button',
+          'button.ytp-button.ytp-autonav-toggle'
+        ];
+        let btn = null;
+        for (const sel of toggleCandidates) {
+          const el = document.querySelector(sel);
+          if (el) { btn = el; break; }
+        }
+        if (btn) {
+          const parentBtn = btn.closest('button') || btn;
+          const isOn = (parentBtn.getAttribute('aria-checked') === 'true') || (btn.getAttribute('aria-checked') === 'true');
+          if (isOn) {
+            (parentBtn.click ? parentBtn : btn).click();
+            console.log('Autoplay dimatikan melalui toggle');
+          } else {
+            console.log('Autoplay sudah OFF');
+          }
+        } else {
+          console.log('Tombol autoplay tidak ditemukan');
+        }
+        const video = document.querySelector('video');
+        if (video) {
+          video.autoplay = false;
+          video.muted = true;
+        }
+        return true;
+        """
+        driver.execute_script(disable_autoplay_script)
+        print(f"TAB {tab_number}: Autoplay OFF dipastikan")
+        return True
+    except Exception as e:
+        print(f"TAB {tab_number}: Gagal set autoplay OFF: {e}")
+        return False
+
+def prepare_tab_for_playback(driver, tab_number):
+    """
+    Menutup consent, menunggu elemen, mematikan autoplay, lalu memastikan video diputar.
+    Digunakan saat membuka setiap WINDOW sebelum lanjut membuka WINDOW berikutnya.
+    """
+    try:
+        close_youtube_consent(driver, tab_number)
+        time.sleep(2)
+        if not wait_for_youtube_elements(driver, tab_number):
+            print(f"TAB {tab_number}: Elemen YouTube belum siap, lanjutkan dengan hati-hati")
+        set_autoplay_off(driver, tab_number)
+        driver.execute_script("window.scrollTo(0, 500)")
+        time.sleep(1)
+        played = ensure_video_plays(driver, tab_number, max_attempts=5)
+        if played:
+            print(f"TAB {tab_number}: {get_status_message('ok')} Siap: video PLAYING dan autoplay OFF")
+            return True
+        print(f"TAB {tab_number}: {get_status_message('error')} Gagal memastikan video PLAYING")
+        return False
+    except Exception as e:
+        print(f"TAB {tab_number}: Error prepare: {e}")
+        return False
+
 def create_and_manage_tabs(environment, video_ids):
     """
-    Membuka SEMUA jendela (new window) terlebih dahulu, lalu memproses tiap jendela.
+    Buka tiap WINDOW satu per satu, dan SETIAP kali:
+      - buka URL
+      - tutup consent
+      - matikan autoplay
+      - klik play + verifikasi
+    Setelah SEMUA WINDOW siap, barulah monitoring bergilir seperti biasa.
     """
     print(f"Environment terdeteksi: {environment}")
-    
-    # Inisialisasi driver utama
     main_driver = initialize_chrome_driver(environment)
     main_driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-    
+
     try:
-        # Setup consent cookie YouTube sebagai fallback (sekali saja di sesi ini)
         print("Mengatur consent cookie YouTube...")
         setup_youtube_consent_cookie(main_driver)
 
-        # FASE 1: BUKA SEMUA JENDELA DULU (new window) + ARAHKAN KE URL VIDEO
         window_handles = []
 
-        for i, video_id in enumerate(video_ids):
+        # BUKA DAN SIAPKAN SETIAP WINDOW SATU PER SATU
+        for i, video_id in enumerate(video_ids, start=1):
             url = f"https://www.youtube.com/watch?v={video_id}"
-            if i == 0:
-                # Gunakan jendela pertama yang sudah ada
+            if i == 1:
                 main_driver.get(url)
                 window_handles.append(main_driver.current_window_handle)
-                print(f"Membuka WINDOW {i+1}: {url}")
+                print(f"Membuka WINDOW {i}: {url}")
             else:
-                # Selenium 4: buka jendela baru (bukan tab)
                 main_driver.switch_to.new_window('window')
                 main_driver.get(url)
                 window_handles.append(main_driver.current_window_handle)
-                print(f"Membuka WINDOW {i+1}: {url}")
+                print(f"Membuka WINDOW {i}: {url}")
 
-        print(f"\nTotal jendela yang dibuka: {len(window_handles)}")
-        for i, handle in enumerate(window_handles):
+            # Setelah buka WINDOW i, langsung siapkan: consent -> autoplay OFF -> PLAY
+            ok = prepare_tab_for_playback(main_driver, i)
+            if not ok:
+                print(f"WINDOW {i}: {get_status_message('warning')} Tidak siap sepenuhnya (akan dicoba perbaiki saat monitoring)")
+
+        print(f"\nTotal WINDOW dibuka: {len(window_handles)}")
+        for i, handle in enumerate(window_handles, start=1):
             main_driver.switch_to.window(handle)
-            print(f"WINDOW {i+1} title: {main_driver.title}")
+            print(f"WINDOW {i} title: {main_driver.title}")
 
-        # FASE 2: PROSES LANJUTAN PER JENDELA (play, verifikasi, monitoring)
-        for i, (handle, video_id) in enumerate(zip(window_handles, video_ids), start=1):
+        # MONITORING BERGILIR SETELAH SEMUA WINDOW SIAP
+        print("\nMemulai monitoring bergilir pada semua WINDOW...")
+        for i, (handle, vid) in enumerate(zip(window_handles, video_ids), start=1):
             try:
                 main_driver.switch_to.window(handle)
-                # Karena URL sudah dibuka pada fase 1, set navigate=False
-                play_video_in_tab(main_driver, video_id, i, navigate=False)
-            except Exception as e:
-                print(f"Error saat memproses WINDOW {i}: {e}")
+                print(f"\n--- Monitoring WINDOW {i} ---")
+                # Jika sempat down, coba pastikan ulang
+                if not verify_video_is_playing(main_driver, i):
+                    set_autoplay_off(main_driver, i)
+                    ensure_video_plays(main_driver, i, max_attempts=3)
 
-        # Tunggu sebentar agar user bisa melihat semua jendela
-        print("\nSemua jendela telah diproses. Menunggu 60 detik...")
+                # Monitoring real-time (seperti biasa)
+                monitor_ok = monitor_video_playback(main_driver, i, check_interval=5, max_checks=60)
+                if not monitor_ok:
+                    print(f"WINDOW {i}: {get_status_message('warning')} Monitoring tidak stabil, mencoba sekali lagi play")
+                    ensure_video_plays(main_driver, i, max_attempts=2)
+
+                # Opsional: pantau perubahan URL original
+                try:
+                    monitor_url_changes(main_driver, vid, max_wait_time=120)
+                except Exception as e:
+                    print(f"WINDOW {i}: monitor_url_changes error: {e}")
+
+            except Exception as e:
+                print(f"Error saat monitoring WINDOW {i}: {e}")
+
+        print("\nMonitoring bergilir selesai. Menunggu 60 detik...")
         time.sleep(60)
-        
+
     except Exception as e:
         print(f"Error dalam create_and_manage_tabs: {e}")
-    
     finally:
-        # Tutup semua jendela
         print("Menutup semua jendela...")
         main_driver.quit()
 
@@ -1266,7 +1391,7 @@ def demo_single_tab_verification(environment, video_id, tab_number=1):
         # Tunggu elemen YouTube
         time.sleep(5)
         if not wait_for_youtube_elements(driver, tab_number):
-            print("⚠️ Elemen YouTube tidak muncul dengan baik")
+            print(f"{get_status_message('warning')} Elemen YouTube tidak muncul dengan baik")
         
         # Debug halaman
         debug_youtube_page(driver, tab_number)
@@ -1291,16 +1416,16 @@ def demo_single_tab_verification(environment, video_id, tab_number=1):
                 continuous_success = continuous_video_monitoring(driver, tab_number, duration_minutes=2)
                 print(f"Continuous monitoring result: {continuous_success}")
             else:
-                print("⚠️ Monitoring real-time tidak berhasil")
+                print(f"{get_status_message('warning')} Monitoring real-time tidak berhasil")
         else:
-            print("❌ Video tidak dapat diputar")
+            print(f"{get_status_message('error')} Video tidak dapat diputar")
             
             print("\n=== FORCE PLAY DENGAN MULTIPLE METHODS ===")
             force_success = force_video_play_with_multiple_methods(driver, tab_number)
             if force_success:
-                print("🎉 Video berhasil diputar dengan force methods!")
+                print(f"{get_status_message('success')} Video berhasil diputar dengan force methods!")
             else:
-                print("❌ Semua force methods gagal")
+                print(f"{get_status_message('error')} Semua force methods gagal")
         
         # Tunggu sebentar untuk user melihat hasil
         print("\nDemo selesai. Menunggu 10 detik...")
@@ -1338,7 +1463,7 @@ def demo_advanced_monitoring(environment, video_id, tab_number=1):
         
         # Play video
         if ensure_video_plays(driver, tab_number):
-            print("✅ Video berhasil diputar, memulai advanced monitoring...")
+            print(f"{get_status_message('ok')} Video berhasil diputar, memulai advanced monitoring...")
             
             # Custom monitoring dengan interval yang lebih pendek
             print("\n=== CUSTOM MONITORING (5 detik interval, 30 checks) ===")
@@ -1349,7 +1474,7 @@ def demo_advanced_monitoring(environment, video_id, tab_number=1):
             )
             
             if custom_monitoring:
-                print("✅ Custom monitoring berhasil!")
+                print(f"{get_status_message('ok')} Custom monitoring berhasil!")
                 
                 # Continuous monitoring dengan durasi pendek
                 print("\n=== CONTINUOUS MONITORING (1 menit) ===")
@@ -1360,7 +1485,7 @@ def demo_advanced_monitoring(environment, video_id, tab_number=1):
                 
                 print(f"Continuous monitoring result: {continuous_result}")
             else:
-                print("⚠️ Custom monitoring tidak berhasil")
+                print(f"{get_status_message('warning')} Custom monitoring tidak berhasil")
         
         # Tunggu untuk user
         print("\nAdvanced monitoring demo selesai. Menunggu 5 detik...")
