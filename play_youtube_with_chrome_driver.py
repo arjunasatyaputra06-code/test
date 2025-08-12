@@ -1279,46 +1279,69 @@ def set_autoplay_off(driver, tab_number):
 
 def detect_ad_by_skip_button(driver, tab_number, timeout_seconds=2.0):
     """
-    Mendeteksi apakah iklan sedang berjalan dengan memeriksa keberadaan tombol skip_button
-    sesuai referensi pada youtube_element.txt. Jika tombol ditemukan dan terlihat, anggap iklan ada.
-    Tidak melakukan klik skip; hanya verifikasi lalu kembalikan True.
+    Mendeteksi apakah iklan sedang berjalan.
+    Strategi:
+      1) Periksa status player melalui class `ad-showing` / `ad-interrupting` pada `#movie_player`
+      2) Periksa keberadaan tombol "Lewati/Skip" dengan berbagai selector, termasuk yang di `youtube_element.txt`
+    Jika salah satu indikasi ditemukan, kembalikan True dan TIDAK melakukan klik skip (biarkan iklan berjalan).
     """
     try:
-        print(f"TAB {tab_number}: Memeriksa adanya iklan (skip_button)...")
-        # Selector utama dari youtube_element.txt dan beberapa fallback yang umum
-        selectors = [
-            "#skip-button\\:v",                  # dari youtube_element.txt (escaped colon)
-            "button#skip-button\\:v",           # variasi eksplisit button
-            "button[id^='skip-button']",          # prefix-based id
-            "button.ytp-skip-ad-button",          # class umum skip
-            ".ytp-skip-ad-button"                 # fallback class
+        print(f"TAB {tab_number}: Memeriksa adanya iklan (status player/skip_button)...")
+
+        # Variasi selector untuk tombol skip/iklan (multi-versi UI, multi-bahasa)
+        skip_selectors = [
+            "#skip-button\\:v",                    # dari youtube_element.txt (escaped colon)
+            "button#skip-button\\:v",             # variasi eksplisit button
+            "button[id^='skip-button']",            # prefix-based id dinamis
+            ".ytp-skip-ad-button",                  # umum
+            "button.ytp-skip-ad-button",            # umum (button)
+            ".ytp-ad-skip-button",                  # variasi lama
+            "button.ytp-ad-skip-button",            # variasi lama (button)
+            ".ytp-skip-ad-button-modern",           # variasi modern
+            ".ytp-ad-skip-button-modern",           # variasi modern lain
+            ".ytp-ad-overlay-close-button",         # overlay ad close (bukan skip, tapi indikasi ad)
+            ".ytp-ad-player-overlay"                 # overlay ad container
         ]
 
-        check_script = """
+        script = """
         const sels = arguments[0];
+        const result = { isAd: false, hasSkip: false };
+        const player = document.querySelector('#movie_player');
+        if (player) {
+          const cl = player.classList;
+          if (cl && (cl.contains('ad-showing') || cl.contains('ad-interrupting'))) {
+            result.isAd = true;
+          }
+        }
         for (const sel of sels) {
           const el = document.querySelector(sel);
           if (el) {
             const style = window.getComputedStyle(el);
             const visible = style && style.visibility !== 'hidden' && style.display !== 'none' && el.offsetParent !== null;
-            if (visible) { return true; }
+            if (visible) { result.hasSkip = true; break; }
           }
         }
-        return false;
+        return result;
         """
 
-        end_time = time.time() + timeout_seconds
+        # Perpanjang polling agar sempat muncul skip (skippable biasanya >= 5 detik)
+        end_time = time.time() + max(timeout_seconds, 6.0)
         while time.time() < end_time:
             try:
-                found = driver.execute_script(check_script, selectors)
-                if found:
-                    print(f"TAB {tab_number}: Iklan terdeteksi (skip_button terlihat). Membiarkan iklan berjalan...")
+                res = driver.execute_script(script, skip_selectors) or {}
+                is_ad = bool(res.get('isAd'))
+                has_skip = bool(res.get('hasSkip'))
+                if is_ad or has_skip:
+                    if has_skip:
+                        print(f"TAB {tab_number}: Iklan terdeteksi (skip_button terlihat). Biarkan iklan berjalan...")
+                    else:
+                        print(f"TAB {tab_number}: Iklan terdeteksi dari status player (ad-showing/ad-interrupting). Biarkan iklan berjalan...")
                     return True
             except Exception:
                 pass
-            time.sleep(0.4)
+            time.sleep(0.5)
 
-        print(f"TAB {tab_number}: Tidak ada indikasi iklan via skip_button saat ini")
+        print(f"TAB {tab_number}: Tidak ada indikasi iklan saat ini (skip_button/status ad)")
         return False
     except Exception as e:
         print(f"TAB {tab_number}: Error deteksi iklan: {e}")
