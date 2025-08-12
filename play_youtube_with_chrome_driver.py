@@ -837,6 +837,12 @@ def ensure_video_plays(driver, tab_number, max_attempts=5):
     """
     print(f"TAB {tab_number}: Memastikan video diputar dengan {max_attempts} attempts...")
     
+    # Reset penanda iklan pada driver
+    try:
+        setattr(driver, "_ad_detected", False)
+    except Exception:
+        pass
+
     for attempt in range(1, max_attempts + 1):
         print(f"TAB {tab_number}: Attempt {attempt}/{max_attempts}")
         
@@ -844,6 +850,18 @@ def ensure_video_plays(driver, tab_number, max_attempts=5):
         if attempt == 1:
             close_youtube_consent(driver, tab_number)
         
+        # Cek lebih dulu apakah iklan sudah terlihat pada awal attempt ini
+        try:
+            if detect_ad_by_skip_button(driver, tab_number):
+                try:
+                    setattr(driver, "_ad_detected", True)
+                except Exception:
+                    pass
+                print(f"TAB {tab_number}: Iklan terdeteksi pada awal attempt. Menghentikan percobaan play.")
+                return False
+        except Exception:
+            pass
+
         # Coba play video
         video_played = False
         
@@ -893,6 +911,17 @@ def ensure_video_plays(driver, tab_number, max_attempts=5):
                 return True
             else:
                 print(f"TAB {tab_number}: {get_status_message('warning')} Video dimainkan tapi tidak terverifikasi, mencoba lagi...")
+                # Setelah gagal verifikasi, periksa iklan pada attempt ini
+                try:
+                    if detect_ad_by_skip_button(driver, tab_number):
+                        try:
+                            setattr(driver, "_ad_detected", True)
+                        except Exception:
+                            pass
+                        print(f"TAB {tab_number}: Iklan terdeteksi setelah gagal verifikasi pada attempt ini.")
+                        return False
+                except Exception:
+                    pass
                 video_played = False
         
         # Tunggu sebentar sebelum attempt berikutnya
@@ -1312,6 +1341,17 @@ def prepare_tab_for_playback(driver, tab_number):
 
         # 1) Coba memainkan video sekali terlebih dahulu
         played_first_try = ensure_video_plays(driver, tab_number, max_attempts=1)
+        if getattr(driver, "_ad_detected", False):
+            try:
+                driver.execute_script("window.scrollTo(0, 300)")
+            except Exception:
+                pass
+            print(f"TAB {tab_number}: Iklan terdeteksi pada percobaan pertama. Biarkan iklan berjalan, lanjut ke tab berikutnya...")
+            try:
+                setattr(driver, "_ad_detected", False)
+            except Exception:
+                pass
+            return True
         if played_first_try:
             print(f"TAB {tab_number}: {get_status_message('ok')} Siap: video PLAYING dan autoplay OFF")
             return True
@@ -1327,6 +1367,17 @@ def prepare_tab_for_playback(driver, tab_number):
 
         # 3) Jika tidak ada iklan, lanjutkan sisa attempt untuk memastikan video bermain
         played = ensure_video_plays(driver, tab_number, max_attempts=4)
+        if getattr(driver, "_ad_detected", False):
+            try:
+                driver.execute_script("window.scrollTo(0, 300)")
+            except Exception:
+                pass
+            print(f"TAB {tab_number}: Iklan terdeteksi saat percobaan lanjutan. Biarkan iklan berjalan, lanjut ke tab berikutnya...")
+            try:
+                setattr(driver, "_ad_detected", False)
+            except Exception:
+                pass
+            return True
         if played:
             print(f"TAB {tab_number}: {get_status_message('ok')} Siap: video PLAYING dan autoplay OFF")
             return True
