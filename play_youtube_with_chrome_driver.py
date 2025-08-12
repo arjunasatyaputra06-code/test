@@ -52,6 +52,12 @@
 #    - Success rate calculation
 #    - Auto-retry mechanism
 #    - Final report dengan statistik
+#
+# 8. close_youtube_consent() - Menangani dialog consent YouTube (GDPR):
+#    - Switch ke iframe consent YouTube
+#    - Klik tombol consent multi-bahasa (Reject all/Accept all)
+#    - Fallback dengan cookie CONSENT
+#    - Diterapkan di semua navigasi YouTube
 
 # CARA PENGGUNAAN:
 # ================
@@ -68,6 +74,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 import time
 import os
 import platform
@@ -85,6 +92,92 @@ def detect_environment():
         return "macos"
     else:
         return "linux"
+
+def close_youtube_consent(driver, tab_number=0, timeout=12):
+    """
+    Fungsi untuk menutup dialog consent YouTube (GDPR consent)
+    """
+    try:
+        print(f"TAB {tab_number}: Mencoba menutup dialog consent YouTube...")
+        
+        # 1) Switch ke iframe consent (consent.youtube / consent.google)
+        iframe_locators = [
+            (By.CSS_SELECTOR, "iframe[src*='consent.youtube.com']"),
+            (By.CSS_SELECTOR, "iframe[src*='consent.google.com']"),
+            (By.CSS_SELECTOR, "iframe[src*='consent.youtube.com']"),
+        ]
+        
+        for by, sel in iframe_locators:
+            try:
+                WebDriverWait(driver, 3).until(EC.frame_to_be_available_and_switch_to_it((by, sel)))
+                print(f"TAB {tab_number}: Berhasil switch ke iframe consent")
+                break
+            except TimeoutException:
+                continue
+
+        # 2) Klik tombol "Reject all" atau "Accept all" (cover multi-bahasa)
+        button_xpaths = [
+            "//button[normalize-space()='Reject all']",
+            "//button[normalize-space()='Accept all']",
+            "//button[normalize-space()='Tolak semua']",
+            "//button[normalize-space()='Setuju semua']",
+            "//button[contains(@aria-label,'Reject')]",
+            "//button[contains(@aria-label,'Accept')]",
+            "//button[@jsname='tWT92d']",  # reject (sering dipakai Google)
+            "//button[@jsname='higCR']",   # accept (sering dipakai Google)
+        ]
+        
+        clicked = False
+        for xp in button_xpaths:
+            els = driver.find_elements(By.XPATH, xp)
+            for el in els:
+                if el.is_displayed() and el.is_enabled():
+                    el.click()
+                    print(f"TAB {tab_number}: Berhasil klik tombol consent: {xp}")
+                    clicked = True
+                    break
+            if clicked:
+                break
+                
+        if not clicked:
+            print(f"TAB {tab_number}: Tidak ada tombol consent yang bisa diklik")
+            
+    except Exception as e:
+        print(f"TAB {tab_number}: Error saat menutup consent: {e}")
+    finally:
+        # 3) Kembali ke main document walau gagal
+        try:
+            driver.switch_to.default_content()
+            print(f"TAB {tab_number}: Kembali ke main document")
+        except Exception:
+            pass
+
+def setup_youtube_consent_cookie(driver):
+    """
+    Fungsi fallback untuk mengatur cookie CONSENT YouTube
+    """
+    try:
+        print("Mengatur cookie CONSENT YouTube sebagai fallback...")
+        
+        # Buka YouTube homepage dulu
+        driver.get("https://www.youtube.com/")
+        time.sleep(3)
+        
+        # Tutup consent dialog jika muncul
+        close_youtube_consent(driver, 0)
+        
+        # Set cookie CONSENT (tidak selalu diperlukan/berhasil di semua region)
+        try:
+            driver.add_cookie({
+                "name": "CONSENT",
+                "value": "YES+cb.20240620-00-p0.en+FX"
+            })
+            print("Cookie CONSENT berhasil diatur")
+        except Exception as e:
+            print(f"Gagal mengatur cookie CONSENT: {e}")
+            
+    except Exception as e:
+        print(f"Error saat setup consent cookie: {e}")
 
 # Setup Chrome berdasarkan environment
 def setup_chrome_options(environment):
@@ -107,7 +200,6 @@ def setup_chrome_options(environment):
         chrome_options.add_argument('--disable-extensions')
         chrome_options.add_argument('--disable-plugins')
         chrome_options.add_argument('--disable-images')
-        chrome_options.add_argument('--disable-javascript')
         chrome_options.add_argument('--disable-web-security')
         chrome_options.add_argument('--allow-running-insecure-content')
         chrome_options.add_argument('--disable-background-timer-throttling')
@@ -357,6 +449,8 @@ def monitor_url_changes(driver, original_video_id, max_wait_time=300):
             try:
                 # Kembali ke video asli
                 driver.get(original_url)
+                # Tutup dialog consent YouTube jika muncul
+                close_youtube_consent(driver, 0)
                 time.sleep(3)
 
                 # Coba play video lagi
@@ -475,6 +569,9 @@ def play_video_in_tab(driver, video_id, tab_number):
         driver.get(original_url)
         print(f"TAB {tab_number}: Navigasi ke: {original_url}")
 
+        # Tutup dialog consent YouTube jika muncul
+        close_youtube_consent(driver, tab_number)
+        
         # Wait for page to load
         time.sleep(5)
 
@@ -699,6 +796,10 @@ def ensure_video_plays(driver, tab_number, max_attempts=5):
     
     for attempt in range(1, max_attempts + 1):
         print(f"TAB {tab_number}: Attempt {attempt}/{max_attempts}")
+        
+        # Fallback: coba tutup consent dialog sebelum mencoba play
+        if attempt == 1:
+            close_youtube_consent(driver, tab_number)
         
         # Coba play video
         video_played = False
@@ -1072,6 +1173,10 @@ def create_and_manage_tabs(environment, video_ids):
     main_driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     
     try:
+        # Setup consent cookie YouTube sebagai fallback
+        print("Mengatur consent cookie YouTube...")
+        setup_youtube_consent_cookie(main_driver)
+        
         # Buka tab pertama dengan video pertama
         print("Membuka tab pertama...")
         play_video_in_tab(main_driver, video_ids[0], 1)
@@ -1147,6 +1252,9 @@ def demo_single_tab_verification(environment, video_id, tab_number=1):
         driver.get(url)
         print(f"Navigasi ke: {url}")
         
+        # Tutup dialog consent YouTube jika muncul
+        close_youtube_consent(driver, tab_number)
+        
         # Tunggu elemen YouTube
         time.sleep(5)
         if not wait_for_youtube_elements(driver, tab_number):
@@ -1211,6 +1319,10 @@ def demo_advanced_monitoring(environment, video_id, tab_number=1):
         # Navigasi ke video
         url = f"https://www.youtube.com/watch?v={video_id}"
         driver.get(url)
+        
+        # Tutup dialog consent YouTube jika muncul
+        close_youtube_consent(driver, tab_number)
+        
         time.sleep(5)
         
         # Tunggu elemen
@@ -1280,12 +1392,12 @@ if __name__ == "__main__":
     
     # Default: Multiple tabs
     video_ids = [
-        "6lk3RO3bPmQ",  # Video 1
-        "DGDmRgrsWlk",  # Video 2 (Never Gonna Give You Up)
-        "uO9FgSUBTx0",  # Video 3 (Me at the zoo)
-        "gPU1uCFyHQQ",  # Video 4 (Luis Fonsi - Despacito)
-        "sXIYXX5bBbY",  # Video 5 (PSY - GANGNAM STYLE)
-        "wdtzfHDBmLs"   # Video 6 (duplikat untuk testing)
+        "DGDmRgrsWlk",  # Video 1
+        "6lk3RO3bPmQ",  # Video 2
+        "uO9FgSUBTx0",  # Video 3
+        "gPU1uCFyHQQ",  # Video 4
+        "sXIYXX5bBbY",  # Video 5
+        "wdtzfHDBmLs"   # Video 6
     ]
     
     # Deteksi environment
