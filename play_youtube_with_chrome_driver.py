@@ -557,7 +557,7 @@ def debug_youtube_page(driver, tab_number):
     except Exception as e:
         print(f"TAB {tab_number}: Error saat debugging: {e}")
 
-def play_video_in_tab(driver, video_id, tab_number):
+def play_video_in_tab(driver, video_id, tab_number, navigate=True):
     """
     Fungsi untuk memainkan video di tab tertentu
     """
@@ -566,8 +566,11 @@ def play_video_in_tab(driver, video_id, tab_number):
         
         # Navigate to YouTube video
         original_url = f"https://www.youtube.com/watch?v={video_id}"
-        driver.get(original_url)
-        print(f"TAB {tab_number}: Navigasi ke: {original_url}")
+        if navigate:
+            driver.get(original_url)
+            print(f"TAB {tab_number}: Navigasi ke: {original_url}")
+        else:
+            print(f"TAB {tab_number}: Skip navigasi (URL sudah dibuka): {driver.current_url}")
 
         # Tutup dialog consent YouTube jika muncul
         close_youtube_consent(driver, tab_number)
@@ -1164,7 +1167,7 @@ def continuous_video_monitoring(driver, tab_number, duration_minutes=10):
 
 def create_and_manage_tabs(environment, video_ids):
     """
-    Fungsi untuk membuat dan mengelola multiple tab
+    Membuka SEMUA jendela (new window) terlebih dahulu, lalu memproses tiap jendela.
     """
     print(f"Environment terdeteksi: {environment}")
     
@@ -1173,46 +1176,51 @@ def create_and_manage_tabs(environment, video_ids):
     main_driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     
     try:
-        # Setup consent cookie YouTube sebagai fallback
+        # Setup consent cookie YouTube sebagai fallback (sekali saja di sesi ini)
         print("Mengatur consent cookie YouTube...")
         setup_youtube_consent_cookie(main_driver)
-        
-        # Buka tab pertama dengan video pertama
-        print("Membuka tab pertama...")
-        play_video_in_tab(main_driver, video_ids[0], 1)
-        
-        # Buka tab tambahan untuk video lainnya
-        for i in range(1, len(video_ids)):
-            try:
-                print(f"Membuka tab {i+1}...")
-                # Buka tab baru
-                main_driver.execute_script("window.open('');")
-                
-                # Switch ke tab baru
-                main_driver.switch_to.window(main_driver.window_handles[i])
-                
-                # Mainkan video di tab ini
-                play_video_in_tab(main_driver, video_ids[i], i+1)
-                
-            except Exception as e:
-                print(f"Error saat membuka tab {i+1}: {e}")
-        
-        # Tampilkan semua tab yang terbuka
-        print(f"\nTotal tab yang terbuka: {len(main_driver.window_handles)}")
-        for i, handle in enumerate(main_driver.window_handles):
+
+        # FASE 1: BUKA SEMUA JENDELA DULU (new window) + ARAHKAN KE URL VIDEO
+        window_handles = []
+
+        for i, video_id in enumerate(video_ids):
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            if i == 0:
+                # Gunakan jendela pertama yang sudah ada
+                main_driver.get(url)
+                window_handles.append(main_driver.current_window_handle)
+                print(f"Membuka WINDOW {i+1}: {url}")
+            else:
+                # Selenium 4: buka jendela baru (bukan tab)
+                main_driver.switch_to.new_window('window')
+                main_driver.get(url)
+                window_handles.append(main_driver.current_window_handle)
+                print(f"Membuka WINDOW {i+1}: {url}")
+
+        print(f"\nTotal jendela yang dibuka: {len(window_handles)}")
+        for i, handle in enumerate(window_handles):
             main_driver.switch_to.window(handle)
-            print(f"Tab {i+1}: {main_driver.title}")
-        
-        # Tunggu sebentar agar user bisa melihat semua tab
-        print("\nSemua tab telah dibuka. Menunggu 60 detik...")
+            print(f"WINDOW {i+1} title: {main_driver.title}")
+
+        # FASE 2: PROSES LANJUTAN PER JENDELA (play, verifikasi, monitoring)
+        for i, (handle, video_id) in enumerate(zip(window_handles, video_ids), start=1):
+            try:
+                main_driver.switch_to.window(handle)
+                # Karena URL sudah dibuka pada fase 1, set navigate=False
+                play_video_in_tab(main_driver, video_id, i, navigate=False)
+            except Exception as e:
+                print(f"Error saat memproses WINDOW {i}: {e}")
+
+        # Tunggu sebentar agar user bisa melihat semua jendela
+        print("\nSemua jendela telah diproses. Menunggu 60 detik...")
         time.sleep(60)
         
     except Exception as e:
         print(f"Error dalam create_and_manage_tabs: {e}")
     
     finally:
-        # Tutup semua tab
-        print("Menutup semua tab...")
+        # Tutup semua jendela
+        print("Menutup semua jendela...")
         main_driver.quit()
 
 # Main execution
